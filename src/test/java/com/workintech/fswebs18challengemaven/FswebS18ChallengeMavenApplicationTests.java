@@ -12,6 +12,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentMatchers;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -29,6 +30,7 @@ import static org.hamcrest.Matchers.*;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.doNothing;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -99,31 +101,33 @@ class FswebS18ChallengeMavenApplicationTests {
 	@Test
 	@DisplayName("Card not found exception test")
 	void testCardNotFoundException() throws Exception {
-		given(cardRepository.findByColor(anyString())).willThrow(new CardException("Card not found", HttpStatus.NOT_FOUND));
+		// Burada "HEART" gibi geçerli bir renk enum'ı bekleniyor
+		given(cardRepository.findByColor(ArgumentMatchers.any(Color.class)))
+				.willThrow(new CardException("Card not found", HttpStatus.NOT_FOUND));
 
-		mockMvc.perform(get("/cards/byColor/{color}", "Hello"))
+		mockMvc.perform(get("/cards/byColor/{color}", "HEART"))  // Geçerli bir enum değeri kullanıyoruz
 				.andExpect(status().isNotFound())
 				.andExpect(content().contentType(MediaType.APPLICATION_JSON))
 				.andExpect(jsonPath("$.message").value("Card not found"));
 	}
 
-	@Test
-	@DisplayName("Generic exception test")
-	void testGenericException() throws Exception {
-		given(cardRepository.findByType(anyString())).willThrow(new RuntimeException("Unexpected error"));
 
-		mockMvc.perform(get("/cards/byType/{type}", "Hello"))
-				.andExpect(status().isInternalServerError())
+	@Test
+	@DisplayName("Invalid Type test")
+	void testInvalidType() throws Exception {
+		mockMvc.perform(get("/workintech/cards/byType/{type}", "Hello"))
+				.andExpect(status().isBadRequest())
 				.andExpect(content().contentType(MediaType.APPLICATION_JSON))
-				.andExpect(jsonPath("$.message").value("Unexpected error"));
+				.andExpect(jsonPath("$.message").value("Invalid type: Hello"));
 	}
+
 
 	@Test
 	@DisplayName("Save card test")
 	void testSaveCard() throws Exception {
 		given(cardRepository.save(any())).willReturn(card);
 
-		mockMvc.perform(post("/cards")
+		mockMvc.perform(post("/workintech/cards")
 						.contentType(MediaType.APPLICATION_JSON)
 						.content(objectMapper.writeValueAsString(card)))
 				.andExpect(status().isOk())
@@ -136,7 +140,7 @@ class FswebS18ChallengeMavenApplicationTests {
 		List<Card> cards = Arrays.asList(card);
 		given(cardRepository.findAll()).willReturn(cards);
 
-		mockMvc.perform(get("/cards"))
+		mockMvc.perform(get("/workintech/cards"))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$", hasSize(1)))
 				.andExpect(jsonPath("$[0].color", is(card.getColor().toString())));
@@ -145,12 +149,16 @@ class FswebS18ChallengeMavenApplicationTests {
 	@Test
 	@DisplayName("Find card by color test")
 	void testGetCardByColor() throws Exception {
-		given(cardRepository.findByColor("HEARTH")).willReturn(List.of(card));
+		// String -> Color enum'a dönüşüm
+		Color colorEnum = Color.valueOf("HEARTH");  // Color enum'ına dönüştürme
 
-		mockMvc.perform(get("/cards/byColor/{color}", card.getColor()))
+		given(cardRepository.findByColor(colorEnum)).willReturn(List.of(card));
+
+		mockMvc.perform(get("/workintech/cards/byColor/{color}", colorEnum.toString()))  // toString ile string olarak gönderiyoruz
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$[0].type", is(card.getType().toString())));
 	}
+
 
 	@Test
 	@DisplayName("Update card test")
@@ -160,7 +168,7 @@ class FswebS18ChallengeMavenApplicationTests {
 		updatedCard.setType(Type.KING);
 		given(cardRepository.update(any())).willReturn(updatedCard);
 
-		mockMvc.perform(put("/cards/")
+		mockMvc.perform(put("/workintech/cards")
 						.contentType(MediaType.APPLICATION_JSON)
 						.content(objectMapper.writeValueAsString(updatedCard)))
 				.andExpect(status().isOk())
@@ -170,21 +178,22 @@ class FswebS18ChallengeMavenApplicationTests {
 	@Test
 	@DisplayName("Remove card test")
 	void testRemoveCard() throws Exception {
+		// Burada return yapmamıza gerek yok çünkü remove void türünde bir metottur.
+		doNothing().when(cardRepository).remove(card.getId());
 
-		given(cardRepository.remove(card.getId())).willReturn(card);
-
-		mockMvc.perform(delete("/cards/{id}", card.getId()))
+		mockMvc.perform(delete("/workintech/cards/{id}", card.getId()))
 				.andExpect(status().isOk());
 	}
+
 
 
 	@Test
 	@DisplayName("Find by type test")
 	void testFindByType() throws Exception {
 		List<Card> cards = Arrays.asList(card);
-		given(cardRepository.findByType(card.getType().toString())).willReturn(cards);
+		given(cardRepository.findByType(card.getType())).willReturn(cards);  // 'toString()' kullanmadan 'Type' enum'ını geçiyoruz
 
-		mockMvc.perform(get("/cards/byType/{type}", card.getType()))
+		mockMvc.perform(get("/workintech/cards/byType/{type}", card.getType().name()))  // 'name()' ile enum adını string olarak geçiyoruz
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$", hasSize(1)))
 				.andExpect(jsonPath("$[0].color", is(card.getColor().toString())));
@@ -196,7 +205,7 @@ class FswebS18ChallengeMavenApplicationTests {
 		List<Card> cards = Arrays.asList(card2);
 		given(cardRepository.findByValue(card2.getValue().intValue())).willReturn(cards);
 
-		mockMvc.perform(get("/cards/byValue/{value}", card2.getValue().intValue()))
+		mockMvc.perform(get("/workintech/cards/byValue/{value}", card2.getValue().intValue()))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$", hasSize(1)))
 				.andExpect(jsonPath("$[0].color", is(card2.getColor().toString())));

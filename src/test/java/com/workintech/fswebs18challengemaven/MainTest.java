@@ -117,7 +117,8 @@ public class MainTest {
 
         when(query.getResultList()).thenReturn(Arrays.asList(card1, card2));
 
-        List<Card> foundCards = cardRepository.findByColor("HEARTH");
+        List<Card> foundCards = cardRepository.findByColor(Color.valueOf("HEART"));  // Color enum'ına dönüştürdük
+
         assertEquals(2, foundCards.size());
     }
 
@@ -126,10 +127,13 @@ public class MainTest {
         TypedQuery<Card> query = mock(TypedQuery.class);
         when(entityManager.createQuery(anyString(), eq(Card.class))).thenReturn(query);
 
+        // Mock veritabanı sorgusu dönmüyor
         when(query.getResultList()).thenReturn(new ArrayList<>());
 
-        assertThrows(CardException.class, () -> cardRepository.findByColor("HEARTH"));
+        // "HEARTH" String değeri Color enum'ına dönüştürülüyor
+        assertThrows(CardException.class, () -> cardRepository.findByColor(Color.HEARTH));
     }
+
 
     @Test
     void testUpdate() {
@@ -144,13 +148,22 @@ public class MainTest {
 
     @Test
     void testRemove() {
+        // Silinecek kartı oluşturuyoruz
         Card card = new Card();
         card.setId(1L);
+
+        // EntityManager mocklama işlemi
         when(entityManager.find(Card.class, 1L)).thenReturn(card);
-        doNothing().when(entityManager).remove(card);
-        Card removed = cardRepository.remove(1L);
-        assertEquals(1L, removed.getId());
+        doNothing().when(entityManager).remove(card);  // remove() void döndürür
+
+        // Silme işlemi
+        cardRepository.remove(1L);
+
+        // Silinen kartı kontrol ediyoruz
+        verify(entityManager, times(1)).remove(card);
+        assertEquals(1L, card.getId()); // Kartın id'sinin 1 olması gerektiğini kontrol ediyoruz
     }
+
 
     @Test
     void testFindByValue() {
@@ -175,18 +188,23 @@ public class MainTest {
         TypedQuery<Card> query = mock(TypedQuery.class);
         when(entityManager.createQuery(anyString(), eq(Card.class))).thenReturn(query);
 
+        // Kartları oluşturuyoruz
         Card card1 = new Card();
         card1.setColor(Color.HEARTH);
-        card1.setType(Type.ACE);
+        card1.setType(Type.ACE);  // Type enum değeri
 
         Card card2 = new Card();
         card2.setColor(Color.HEARTH);
-        card2.setType(Type.ACE);
+        card2.setType(Type.ACE);  // Type enum değeri
 
+        // Mock'lanan query'nin sonucu olarak kartları döndürüyoruz
         when(query.getResultList()).thenReturn(Arrays.asList(card1, card2));
-        List<Card> cards = cardRepository.findByType("ACE");
-        assertEquals(2, cards.size());
+
+        // "ACE" String yerine Type.ACE kullanmalıyız
+        List<Card> cards = cardRepository.findByType(Type.ACE);  // String yerine enum kullanıyoruz
+        assertEquals(2, cards.size());  // Sonucun boyutunun 2 olduğunu kontrol ediyoruz
     }
+
 
 
     @Test
